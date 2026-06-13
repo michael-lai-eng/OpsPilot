@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opspilot-backend
+  namespace: opspilot
+  labels:
+    app: opspilot-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: opspilot-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: opspilot-backend
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/YOUR_ORG/opspilot-backend:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opspilot-secrets
+                  key: DATABASE_URL
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opspilot-secrets
+                  key: REDIS_URL
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: opspilot-secrets
+                  key: SECRET_KEY
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opspilot-secrets
+                  key: CELERY_BROKER_URL
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opspilot-backend
+  namespace: opspilot
+spec:
+  selector:
+    app: opspilot-backend
+  ports:
+    - port: 8000
+      targetPort: 8000

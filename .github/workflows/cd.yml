@@ -1,0 +1,127 @@
+name: CD — Deploy to Kubernetes
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, prod]
+        default: staging
+      image_tag:
+        description: Image tag to deploy (defaults to latest sha)
+        required: false
+
+jobs:
+  deploy-staging:
+    name: Deploy → Staging
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success')
+    environment:
+      name: staging
+      url: https://staging.opspilot.example.com
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="sha-$(echo ${{ github.sha }} | cut -c1-7)"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > ~/.kube/config
+
+      - name: Deploy backend
+        run: |
+          kubectl set image deployment/opspilot-backend \
+            backend=ghcr.io/${{ github.repository_owner }}/opspilot-backend:${{ steps.tag.outputs.tag }} \
+            -n opspilot-staging
+          kubectl rollout status deployment/opspilot-backend -n opspilot-staging --timeout=5m
+
+      - name: Deploy frontend
+        run: |
+          kubectl set image deployment/opspilot-frontend \
+            frontend=ghcr.io/${{ github.repository_owner }}/opspilot-frontend:${{ steps.tag.outputs.tag }} \
+            -n opspilot-staging
+          kubectl rollout status deployment/opspilot-frontend -n opspilot-staging --timeout=5m
+
+      - name: Run smoke tests
+        run: |
+          sleep 10
+          curl -sf https://staging.opspilot.example.com/health || exit 1
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ Staging deployment failed for `${{ steps.tag.outputs.tag }}`'
+            })
+
+  deploy-prod:
+    name: Deploy → Production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: >
+      github.event_name == 'workflow_dispatch' &&
+      inputs.environment == 'prod'
+    environment:
+      name: production
+      url: https://opspilot.example.com
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="sha-$(echo ${{ github.sha }} | cut -c1-7)"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG_PROD }}" | base64 -d > ~/.kube/config
+
+      - name: Rolling deploy backend
+        run: |
+          kubectl set image deployment/opspilot-backend \
+            backend=ghcr.io/${{ github.repository_owner }}/opspilot-backend:${{ steps.tag.outputs.tag }} \
+            -n opspilot
+          kubectl rollout status deployment/opspilot-backend -n opspilot --timeout=10m
+
+      - name: Rolling deploy frontend
+        run: |
+          kubectl set image deployment/opspilot-frontend \
+            frontend=ghcr.io/${{ github.repository_owner }}/opspilot-frontend:${{ steps.tag.outputs.tag }} \
+            -n opspilot
+          kubectl rollout status deployment/opspilot-frontend -n opspilot --timeout=10m
+
+      - name: Production smoke test
+        run: curl -sf https://opspilot.example.com/health || exit 1
