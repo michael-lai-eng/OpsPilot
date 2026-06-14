@@ -1,4 +1,4 @@
-version: "3.9"
+# version 屬性已棄用，移除避免警告
 
 services:
   postgres:
@@ -10,7 +10,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5433:5432"   # 用 5433 避免與本機 Postgres 衝突
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U opspilot"]
       interval: 5s
@@ -23,7 +23,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "6379:6379"
+      - "6380:6379"   # 用 6380 避免與本機 Redis 衝突
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

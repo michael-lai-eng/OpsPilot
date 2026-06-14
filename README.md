@@ -1,5 +1,6 @@
 # 🚀 OpsPilot — DevOps Operations Platform
 
+![OpsPilot_Architecture.png](images/OpsPilot_Architecture.png)
 A production-grade DevOps platform for CI/CD pipeline management, automated deployments, runbook automation, and infrastructure monitoring.
 
 **Tech Stack:** Vue 3 · FastAPI · PostgreSQL · Redis · Celery · Kubernetes · GitHub Actions
