@@ -1,4 +1,4 @@
-from sqlalchemy import String, Integer, Text, DateTime, JSON, ForeignKey
+from sqlalchemy import String, Integer, BigInteger, Text, DateTime, JSON, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
 from app.db.session import Base
@@ -24,7 +24,7 @@ class PipelineRun(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     pipeline_id: Mapped[int] = mapped_column(ForeignKey("pipelines.id"), index=True)
     run_number: Mapped[int] = mapped_column(Integer)
-    github_run_id: Mapped[int] = mapped_column(Integer, nullable=True)
+    github_run_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
     status: Mapped[str] = mapped_column(String(32))   # queued | in_progress | success | failure | cancelled
     conclusion: Mapped[str] = mapped_column(String(32), nullable=True)
     triggered_by: Mapped[str] = mapped_column(String(64))
